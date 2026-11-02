@@ -103,8 +103,12 @@ body.in-session #tabs { display: none; }
 .cadran .piste { fill: none; stroke: rgba(42, 58, 102, .6); stroke-width: 8; }
 .cadran .arc { fill: none; stroke-width: 8; stroke-linecap: round; }
 .cadran .repere-or { stroke: var(--or); stroke-width: 4; stroke-linecap: round; }
-/* L'avatar reste invisible (attribut hidden) tant que son fichier n'existe pas. */
-.cadran .medaillon { position: absolute; left: 50%; top: 50%; width: 78.67%; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%; object-fit: contain;
+/* L'avatar reste invisible (attribut hidden) tant que son fichier n'existe pas.
+   Disque = intérieur de l'anneau : 244/300 = 81,33 % du cadran, son bas à 9,33 % du bas du cadran.
+   Personnage (image recadrée) : 90 % de la hauteur du disque, centré, posé 2 % du disque au-dessus de son bas. */
+.cadran .medaillon { position: absolute; left: 50%; bottom: calc(9.333% + 81.333% * .02); height: calc(81.333% * .9); width: auto; transform: translateX(-50%); }
+/* Lueur bleue du disque, seulement quand l'avatar est affiché. */
+.cadran:has(.medaillon:not([hidden]))::before { content: ''; position: absolute; left: 9.333%; top: 9.333%; width: 81.333%; height: 81.333%; border-radius: 50%;
   background: radial-gradient(circle, rgba(94, 134, 240, .35) 0%, rgba(11, 18, 38, 0) 70%); box-shadow: 0 0 46px rgba(94, 134, 240, .45); }
 .cadran-legende { text-align: center; }
 .objectif-barre { position: relative; height: 10px; border-radius: 5px; background: var(--line); overflow: visible; }
