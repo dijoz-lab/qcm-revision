@@ -435,8 +435,10 @@ if (typeof document !== 'undefined') (function () {
           S.lastBackup = Date.now(); save(); UI.backupMsg = { text: 'Sauvegarde enregistrée.' }; render();
         }).catch(function (e) { UI.backupMsg = { bad: true, text: e && e.code === 'declined' ? 'Enregistrement annulé.' : 'Impossible d’enregistrer un fichier ici. Utilise « Copier la sauvegarde ».' }; render(); });
       } }, 'Enregistrer un fichier de sauvegarde') : null,
-      h('button', { class: 'btn' + (DL ? '' : ' primary'), type: 'button', onclick: copyBackup }, 'Copier la sauvegarde'),
-      h('div', { id: 'copybox' })));
+      partageDisponible() ? h('button', { class: 'btn' + (DL ? '' : ' primary'), type: 'button', onclick: partagerSauvegarde }, 'Partager la sauvegarde') : null,
+      h('button', { class: 'btn' + (DL || partageDisponible() ? '' : ' primary'), type: 'button', onclick: copyBackup }, 'Copier la sauvegarde'),
+      h('div', { id: 'copybox' }),
+      h('p', { class: 'petit muted' }, 'Stockage protégé : ' + (protection === true ? 'oui' : protection === false ? 'non' : protection === null ? 'vérification…' : 'non disponible'))));
     out.push(h('div', { class: 'card' }, h('h3', null, 'Restaurer'),
       h('p', null, 'Remplace tout le contenu actuel par celui d’une sauvegarde.'),
       h('label', { class: 'label', for: 'restorefile' }, 'Depuis un fichier'),
@@ -460,8 +462,42 @@ if (typeof document !== 'undefined') (function () {
       ta.focus(); ta.select();
     }
     (navigator.clipboard && navigator.clipboard.writeText ? navigator.clipboard.writeText(txt) : Promise.reject()).then(function () {
-      S.lastBackup = Date.now(); save(); UI.backupMsg = { text: 'Sauvegarde copiée. Colle-la dans une note ou un message que tu gardes.' }; render();
+      noterSauvegarde('Sauvegarde copiée. Colle-la dans une note ou un message que tu gardes.');
     }).catch(showBox);
+  }
+  // Même mise à jour de la date de sauvegarde pour « Copier » et « Partager ».
+  function noterSauvegarde(message) { S.lastBackup = Date.now(); save(); UI.backupMsg = { text: message }; render(); }
+
+  // ---------- Partager la sauvegarde (menu de partage du téléphone) ----------
+  // Fichier .txt si le navigateur accepte les fichiers, sinon le texte seul ; bouton masqué si le partage n'existe pas.
+  function partageDisponible() { return typeof navigator !== 'undefined' && typeof navigator.share === 'function'; }
+  function dateDuJour() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function partagerSauvegarde() {
+    var txt = backupText(S), donnees = { title: 'Sauvegarde QCM', text: txt }, envoi;
+    try {
+      if (typeof File === 'function' && typeof navigator.canShare === 'function') {
+        var fichier = new File([txt], 'sauvegarde-qcm-' + dateDuJour() + '.txt', { type: 'text/plain' });
+        if (navigator.canShare({ files: [fichier] })) donnees = { title: 'Sauvegarde QCM', files: [fichier] };
+      }
+    } catch (e) {}
+    // Appel direct dans le geste de l'utilisateur (aucune attente avant navigator.share).
+    try { envoi = navigator.share(donnees); } catch (e) { envoi = Promise.reject(e); }
+    Promise.resolve(envoi).then(function () {
+      noterSauvegarde('Sauvegarde partagée. Garde-la dans un endroit sûr.');
+    }, function (e) {
+      if (e && e.name === 'AbortError') return; // annulé par l'utilisateur : ni message, ni date
+      UI.backupMsg = { bad: true, text: 'Le partage n’a pas fonctionné. Utilise « Copier la sauvegarde ».' }; render();
+    });
+  }
+
+  // ---------- Stockage protégé (navigator.storage.persist) ----------
+  // null = vérification en cours ; true / false = réponse du navigateur ; 'indisponible' = API absente ou en échec.
+  var protection = null;
+  function verifierProtection() {
+    try {
+      if (!navigator.storage || typeof navigator.storage.persisted !== 'function') { protection = 'indisponible'; return; }
+      navigator.storage.persisted().then(function (p) { protection = !!p; if (UI.tab === 'backup' && !UI.mode) render(); }, function () { protection = 'indisponible'; });
+    } catch (e) { protection = 'indisponible'; }
   }
   function restore(text) {
     try {
@@ -556,6 +592,11 @@ if (typeof document !== 'undefined') (function () {
   }
 
   render();
+  // Demande discrète de stockage protégé : aucune fenêtre, aucun message, ne bloque jamais le démarrage.
+  try {
+    if (navigator.storage && typeof navigator.storage.persist === 'function') navigator.storage.persist().then(verifierProtection, verifierProtection);
+    else verifierProtection();
+  } catch (e) { verifierProtection(); }
   try {
     if (window.claude && window.claude.use) window.claude.use('downloads').then(function (d) { DL = d; if (UI.tab === 'backup' && !UI.mode) render(); }).catch(function () {});
   } catch (e) {}

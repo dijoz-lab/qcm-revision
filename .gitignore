@@ -2,6 +2,7 @@
 banque-privee/
 exemple-qcm.txt
 sauvegarde-qcm-*.json
+sauvegarde-qcm-*.txt
 .env
 .env.*
 

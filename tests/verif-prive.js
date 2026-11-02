@@ -9,8 +9,8 @@ const { execFileSync } = require('child_process');
 
 const RACINE = path.join(__dirname, '..');
 const BANQUE = path.join(RACINE, 'banque-privee');
-const PRIVES = [/^banque-privee\//, /^exemple-qcm\.txt$/, /^sauvegarde-qcm-.*\.json$/, /^memoire\//, /^\.env(\..*)?$/, /^\.claude\/settings\.local\.json$/];
-const A_IGNORER = ['banque-privee/gav-1.txt', 'exemple-qcm.txt', 'memoire/journal.md', '.env', 'sauvegarde-qcm-2026-01-01.json'];
+const PRIVES = [/^banque-privee\//, /^exemple-qcm\.txt$/, /^sauvegarde-qcm-.*\.json$/, /^sauvegarde-qcm-.*\.txt$/, /^memoire\//, /^\.env(\..*)?$/, /^\.claude\/settings\.local\.json$/];
+const A_IGNORER = ['banque-privee/gav-1.txt', 'exemple-qcm.txt', 'memoire/journal.md', '.env', 'sauvegarde-qcm-2026-01-01.json', 'sauvegarde-qcm-2026-01-01.txt'];
 // Dossiers jamais publiés, sautés quand Git n'est pas disponible.
 const DOSSIERS_EXCLUS = ['.git', 'banque-privee', 'memoire', '.tmp', 'node_modules', '.venv'];
 

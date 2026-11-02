@@ -1,44 +1,14 @@
 // Conditions d'examen sur l'écran de question : aucune indication du nombre de bonnes réponses avant validation,
 // cases à cocher libres pour toutes les questions, notation inchangée (juste seulement si toutes les bonnes et aucune autre).
-// Les scripts de docs/ sont exécutés dans un faux navigateur minimal (module vm de Node), sans rien modifier.
+// Les scripts de docs/ sont exécutés dans un faux navigateur minimal (tests/faux-navigateur.js), sans rien modifier.
 // Lancement depuis le dossier du projet : node --test
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('fs');
-const path = require('path');
-const vm = require('vm');
+const { demarrer: demarrerNavigateur, texte, tous, clic } = require('./faux-navigateur.js');
 
-const DOCS = path.join(__dirname, '..', 'docs');
 const INTERDITS = /réponses? possibles?|une seule réponse|au moins une|vrai ou faux|bonnes? réponses? attendues?/i;
 
-// ---------- faux navigateur minimal ----------
-function El(tag) { this.tagName = tag; this.attrs = {}; this.children = []; this.listeners = {}; this.parentNode = null; this.className = ''; this.hidden = false; this.textContent = ''; }
-El.prototype.nodeType = 1;
-El.prototype.setAttribute = function (k, v) { this.attrs[k] = String(v); if (k === 'hidden') this.hidden = true; };
-El.prototype.addEventListener = function (t, f) { (this.listeners[t] = this.listeners[t] || []).push(f); };
-El.prototype.append = function () { for (const c of arguments) { c.parentNode = this; this.children.push(c); } };
-El.prototype.replaceChildren = function () { this.children = []; this.append.apply(this, arguments); };
-El.prototype.remove = function () { if (this.parentNode) this.parentNode.children = this.parentNode.children.filter(x => x !== this); };
-El.prototype.scrollIntoView = function () {};
-Object.defineProperty(El.prototype, 'firstChild', { get() { return this.children[0]; } });
-function texte(n) { return n.nodeType === 3 ? n.data : (n.textContent || '') + (n.children || []).map(texte).join(''); }
-function tous(n, out) { out = out || []; if (n.nodeType === 1) { out.push(n); n.children.forEach(c => tous(c, out)); } return out; }
-function clic(el) { (el.listeners.click || []).forEach(f => f({ preventDefault() {}, target: el })); }
-
-function demarrer(questions) {
-  const view = new El('div'), tabs = new El('nav'), mem = {};
-  mem['qcm-pj-v1'] = JSON.stringify({ v: 1, questions: questions, sessions: [], current: null, lastBackup: null });
-  const ctx = {
-    console, Math, Date, JSON, String, Array, Object, Number, parseInt, Promise, setTimeout: f => f(), clearTimeout() {},
-    localStorage: { getItem: k => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = String(v); }, removeItem: k => { delete mem[k]; } },
-    navigator: {}, window: { scrollY: 0, scrollTo() {} },
-    document: { body: { classList: { toggle() {} } }, createElement: t => new El(t), createElementNS: (ns, t) => new El(t), createTextNode: d => ({ nodeType: 3, data: d }),
-      getElementById: id => (id === 'view' ? view : id === 'tabs' ? tabs : null) }
-  };
-  vm.createContext(ctx);
-  ['parser.js', 'seance.js', 'stockage.js', 'reglages.js', 'app.js'].forEach(function (f) { vm.runInContext(fs.readFileSync(path.join(DOCS, f), 'utf8'), ctx, { filename: f }); });
-  return { view, mem };
-}
+function demarrer(questions) { return demarrerNavigateur({ v: 1, questions: questions, sessions: [], current: null, lastBackup: null }); }
 function q(id, type, correct, choices) { return { id: id, num: 1, qcm: 'Fictif', theme: 'gav', type: type, text: 'Énoncé fictif ' + id, choices: choices, correct: correct, explanation: 'Explication fictive.' }; }
 const AB = [{ k: 'a', text: 'Choix un' }, { k: 'b', text: 'Choix deux' }, { k: 'c', text: 'Choix trois' }];
 const VF = [{ k: 'V', text: 'Vrai' }, { k: 'F', text: 'Faux' }];
