@@ -49,16 +49,39 @@
   function seancesRecentes() { return S.sessions.filter(function (s) { return s.results && s.results.length; }).slice(-NB_SEANCES_RECENTES); }
   function moyenne(liste) { return liste.length ? Math.round(liste.reduce(function (a, s) { return a + pctSeance(s); }, 0) / liste.length) : null; }
   function joursDepuis(ts) { return Math.floor((Date.now() - ts) / 864e5); }
+  function dateCourte(ts) { return new Date(ts).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }); }
+  // Mouvement : jamais si l'utilisateur a demandé moins de mouvement, et seulement à l'ouverture d'un écran (pas à chaque mise à jour).
+  var MOINS_DE_MOUVEMENT = !window.matchMedia || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var dernierEcran = null, animerEcran = false;
+  // Le nombre compte de 0 à sa valeur en 700 ms environ ; sans animation, il s'affiche directement.
+  function compter(el, valeur) {
+    if (!animerEcran || typeof requestAnimationFrame !== 'function') { el.textContent = valeur + ' %'; return; }
+    var t0 = null;
+    el.textContent = '0 %';
+    requestAnimationFrame(function pas(t) {
+      if (t0 === null) t0 = t;
+      var p = Math.min(1, (t - t0) / 700);
+      el.textContent = Math.round(valeur * (1 - Math.pow(1 - p, 3))) + ' %';
+      if (p < 1) requestAnimationFrame(pas);
+    });
+  }
+  // Grand pourcentage (décoratif : sa valeur est aussi écrite en texte à côté pour les lecteurs d'écran).
+  function chiffreGeant(valeur, classe) {
+    var el = h('div', { class: 'chiffre-geant' + (classe ? ' ' + classe : '') + (animerEcran ? ' anime' : ''), 'aria-hidden': 'true' });
+    if (valeur === null) el.textContent = '—'; else compter(el, valeur);
+    return el;
+  }
   // Avatar : invisible (hidden) tant que son fichier n'a pas pu être chargé ; retiré s'il n'existe pas.
   function avatar(src, alt) {
     return h('img', { class: 'medaillon', src: src, alt: alt, hidden: true, onload: function (e) { e.target.hidden = false; }, onerror: function (e) { e.target.remove(); } });
   }
   // Cadran : 60 graduations, arc proportionnel à pct (aucun arc si null ou 0), repère or à l'objectif, avatar au centre.
+  // Piste de rayon 128 et d'épaisseur 12 : son bord intérieur reste à 122, donc le disque de l'avatar ne change pas.
   function cadran(pct, objectif, classeArc, classeCadran) {
-    var c = 150, r = 126, tour = 2 * Math.PI * r, i, a;
+    var c = 150, r = 128, tour = 2 * Math.PI * r, i, a;
     var svg = sv('svg', { viewBox: '0 0 300 300', 'aria-hidden': 'true', focusable: 'false' });
     var grad = sv('linearGradient', { id: 'degrade-arc', x1: '0', y1: '0', x2: '1', y2: '1' });
-    grad.append(sv('stop', { offset: '0', 'stop-color': '#8FB2FF' }), sv('stop', { offset: '1', 'stop-color': '#5E86F0' }));
+    grad.append(sv('stop', { offset: '0', 'stop-color': '#B7CBFF' }), sv('stop', { offset: '1', 'stop-color': '#5E86F0' }));
     svg.append(sv('defs', {}));
     svg.firstChild.append(grad);
     for (i = 0; i < 60; i++) {
@@ -70,15 +93,17 @@
     if (pct) svg.append(sv('circle', { class: 'arc' + (classeArc ? ' ' + classeArc : ''), stroke: classeArc ? null : 'url(#degrade-arc)', cx: c, cy: c, r: r,
       'stroke-dasharray': (tour * pct / 100) + ' ' + tour, transform: 'rotate(-90 ' + c + ' ' + c + ')' }));
     a = (objectif * 3.6 - 90) * Math.PI / 180;
-    svg.append(sv('line', { class: 'repere-or', x1: c + 114 * Math.cos(a), y1: c + 114 * Math.sin(a), x2: c + 138 * Math.cos(a), y2: c + 138 * Math.sin(a) }));
-    return h('div', { class: 'cadran' + (classeCadran ? ' ' + classeCadran : '') }, svg, avatar(AVATAR_ENTRAINEMENT, 'Avatar d’entraînement'));
+    svg.append(sv('line', { class: 'repere-or', x1: c + 116 * Math.cos(a), y1: c + 116 * Math.sin(a), x2: c + 146 * Math.cos(a), y2: c + 146 * Math.sin(a) }));
+    return h('div', { class: 'cadran' + (classeCadran ? ' ' + classeCadran : '') + (animerEcran ? ' anime' : '') }, svg, avatar(AVATAR_ENTRAINEMENT, 'Avatar d’entraînement'));
   }
+  // Pastille dorée « Objectif 80 % » : un vrai menu natif (select), stylé en pastille.
   function selectObjectif(objectif) {
     var vals = [], v;
     for (v = 50; v <= 100; v += 5) vals.push(v);
     if (vals.indexOf(objectif) === -1) { vals.push(objectif); vals.sort(function (x, y) { return x - y; }); }
-    return h('select', { id: 'objectif', onchange: function (e) { ecrireObjectif(parseInt(e.target.value, 10)); render(); } },
-      vals.map(function (x) { return h('option', { value: x, selected: x === objectif }, x + ' %'); }));
+    return h('label', { class: 'pastille-objectif' }, h('span', null, 'Objectif'),
+      h('select', { id: 'objectif', 'aria-label': 'Mon objectif personnel (ce n’est pas un seuil officiel)', onchange: function (e) { ecrireObjectif(parseInt(e.target.value, 10)); render(); } },
+        vals.map(function (x) { return h('option', { value: x, selected: x === objectif }, x + ' %'); })));
   }
 
   // ---------- état de l'interface ----------
@@ -117,15 +142,15 @@
     var out = [], st = statsMap(S.sessions), total = S.questions.length;
     var objectif = lireReglages().objectif, recentes = seancesRecentes(), moy = moyenne(recentes);
     if (!storageOK) out.push(h('div', { class: 'notice bad' }, "Ce navigateur ne garde pas les données. Ta progression sera perdue à la fermeture. Ouvre la page dans Chrome, hors navigation privée."));
-    out.push(cadran(moy, objectif));
-    out.push(h('div', null, h('span', { class: 'label' }, 'Examen final OPJ · police judiciaire'), h('h1', { class: 'titre-pret' }, 'Prêt.')));
-    out.push(h('div', { class: 'card' },
-      h('div', { class: 'row sb' }, h('span', null, 'Moyenne récente ', h('b', null, moy === null ? '—' : moy + ' %')), h('span', { class: 'or' }, '→ objectif ' + objectif + ' %')),
-      h('div', { class: 'objectif-barre', role: 'img', 'aria-label': moy === null ? 'Pas encore de séance terminée, objectif ' + objectif + ' %' : 'Moyenne récente ' + moy + ' %, objectif ' + objectif + ' %' },
-        h('i', { style: 'width:' + (moy || 0) + '%' }), h('b', { style: 'left:' + objectif + '%' })),
-      h('p', { class: 'muted', style: 'font-size:14px' }, moy === null ? 'Pas encore de séance terminée.' : 'Moyenne des ' + recentes.length + ' dernière(s) séance(s). ' + messageObjectif(moy, objectif)),
-      h('label', { class: 'label', for: 'objectif' }, 'Mon objectif personnel (ce n’est pas un seuil officiel)'),
+    out.push(h('div', { class: 'entete' },
+      h('div', null, h('span', { class: 'label' }, 'Examen final OPJ · police judiciaire'), h('h1', { class: 'titre-pret' }, 'Prêt.')),
       selectObjectif(objectif)));
+    var ecart = moy === null ? null : ecartObjectif(moy, objectif);
+    out.push(h('div', { class: 'zone-cadran' },
+      cadran(moy, objectif),
+      chiffreGeant(moy),
+      h('p', { class: 'phrase-moyenne' }, moy === null ? 'Pas encore de séance terminée.' : [h('span', { class: 'sr-only' }, 'Moyenne récente : ' + moy + ' %. '),
+        'Moyenne récente · ' + (ecart ? 'plus que ' + ecart + (ecart > 1 ? ' points' : ' point') + ' avant ton objectif' : 'objectif atteint')])));
     if (S.current) {
       var cur = S.current;
       out.push(h('div', { class: 'card' }, h('h2', null, 'Séance en cours'),
@@ -134,29 +159,33 @@
         h('div', { class: 'row' }, confirmBtn('Abandonner', 'Confirmer l’abandon', 'danger', function () { finishSession(true); }))));
     } else {
       var size = Math.min(SESSION_SIZE, total);
-      out.push(h('div', { class: 'card' },
+      out.push(h('div', { class: 'bloc-depart' },
         total ? h('button', { class: 'btn primary big', type: 'button', onclick: startSession }, 'Commencer la séance')
               : h('button', { class: 'btn primary big', type: 'button', onclick: function () { setTab('import'); } }, 'Importer un QCM'),
-        total ? h('p', { class: 'muted', style: 'font-size:14px' }, size + ' questions mélangées : garde à vue et procédure, tous les QCM ensemble. Environ un tiers de questions à retravailler, le reste jamais vues ou peu vues.')
-              : h('p', null, "La banque est vide. Importe d'abord un QCM pour pouvoir t'entraîner.")));
+        h('p', { class: 'sous-bouton' }, total ? size + ' questions · garde à vue et procédure' : "La banque est vide. Importe d'abord un QCM pour pouvoir t'entraîner.")));
     }
+    var cartes = [];
     if (recentes.length) {
-      out.push(h('div', { class: 'card' }, h('h3', null, 'Dernières séances'),
-        h('div', { class: 'mini-barres' }, recentes.slice().reverse().map(function (s) {
+      var interrompue = recentes.some(function (s) { return s.partial; });
+      cartes.push(h('div', { class: 'card' }, h('span', { class: 'label' }, 'Dernières séances'),
+        h('div', { class: 'colonnes' }, recentes.map(function (s, i) {
           var p = pctSeance(s);
-          return h('div', { class: 'mini-barre' }, h('b', null, p + ' %'),
-            h('div', { class: 'bar', role: 'img', 'aria-label': p + ' % de questions réussies' }, h('i', { style: 'width:' + p + '%' })),
-            h('span', { class: 'label' }, new Date(s.ts).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) + (s.partial ? ' · interrompue' : '')));
-        }))));
+          return h('div', { class: 'colonne' + (i === recentes.length - 1 ? ' recente' : '') + (p < 50 ? ' faible' : '') },
+            h('b', null, p + ' %'),
+            h('div', { class: 'tube', role: 'img', 'aria-label': p + ' % de questions réussies' + (s.partial ? ', séance interrompue' : '') }, h('i', { style: 'height:' + Math.max(p, 3) + '%' })),
+            h('span', { class: 'label' }, dateCourte(s.ts) + (s.partial ? ' *' : '')));
+        })),
+        interrompue ? h('p', { class: 'petit muted' }, '* séance interrompue') : null));
     }
     if (total) {
       var seen = S.questions.filter(function (q) { return st[q.id]; }).length;
-      out.push(h('div', { class: 'card' }, h('h3', null, 'Banque de questions'),
-        THEMES.map(function (t) { return h('div', { class: 'stat' }, h('span', null, t.name), h('b', null, S.questions.filter(function (q) { return q.theme === t.k; }).length)); }),
-        h('div', { class: 'stat' }, h('span', null, 'Total'), h('b', null, total)),
-        h('div', null, h('div', { class: 'bar', role: 'img', 'aria-label': seen + ' questions vues sur ' + total }, h('i', { style: 'width:' + Math.round(100 * seen / total) + '%' })),
-          h('p', { class: 'muted', style: 'margin-top:6px;font-size:14px' }, seen + ' sur ' + total + ' questions vues au moins une fois'))));
+      cartes.push(h('div', { class: 'card' }, h('span', { class: 'label' }, 'Banque'),
+        h('div', { class: 'total-banque' }, total),
+        h('p', { class: 'petit muted' }, 'questions · ' + seen + ' vues'),
+        h('div', { class: 'bar fine', role: 'img', 'aria-label': seen + ' questions vues sur ' + total }, h('i', { style: 'width:' + Math.round(100 * seen / total) + '%' })),
+        h('p', { class: 'petit muted' }, THEMES.map(function (t) { return t.name + ' ' + S.questions.filter(function (q) { return q.theme === t.k; }).length; }).join(' · '))));
     }
+    if (cartes.length) out.push(h('div', { class: 'duo' }, cartes));
     var jours = S.lastBackup ? joursDepuis(S.lastBackup) : null;
     var txtSauv = jours === null ? 'Aucune sauvegarde faite pour l’instant. ' : jours < 1 ? 'Dernière sauvegarde aujourd’hui. ' : 'Dernière sauvegarde il y a ' + jours + (jours > 1 ? ' jours. ' : ' jour. ');
     var alerte = recentes.length && (jours === null || jours > 7);
@@ -345,7 +374,7 @@
     out.push(h('div', null, h('span', { class: 'label' }, s.partial ? 'Séance interrompue' : 'Séance terminée'), h('h1', null, 'Résultat')));
     out.push(h('div', { class: 'card' },
       cadran(pct, objectif, etat, 'halo'),
-      h('div', { class: 'pourcentage' }, pct + ' %'),
+      chiffreGeant(pct, 'rebond'),
       h('p', { role: 'status', style: 'text-align:center;font-weight:600' }, pct + ' % de questions réussies. ' + messageObjectif(pct, objectif)),
       h('p', { class: 'muted', style: 'text-align:center;font-size:14px' }, 'Objectif personnel, réglable sur l’accueil. Ce n’est pas un seuil officiel de l’examen.'),
       h('div', { class: 'compteurs' },
@@ -418,13 +447,29 @@
 
   // ---------- rendu général ----------
   var TABS = [['home', 'Accueil'], ['import', 'Importer'], ['bank', 'Banque'], ['backup', 'Sauvegarde']];
+  // Icônes des onglets : contours simples dessinés ici (24 x 24).
+  var ICONES = {
+    home: ['M3.5 11 12 4l8.5 7', 'M5.5 9.5v10h13v-10', 'M10 19.5v-5.5h4v5.5'],
+    import: ['M12 4v10.5', 'M7.5 10 12 14.5 16.5 10', 'M4.5 15.5v4h15v-4'],
+    bank: ['M5 5h4v14.5H5z', 'M10.5 5h4v14.5h-4z', 'M16 6.2l3.4-.9 3 13.6-3.4.9z'],
+    backup: ['M12 3.5 5 6.3v5.2c0 4.3 2.9 7.8 7 9 4.1-1.2 7-4.7 7-9V6.3z', 'M9 12.2l2.1 2.1L15.2 10']
+  };
+  function icone(cle) {
+    var s = sv('svg', { viewBox: '0 0 24 24', 'aria-hidden': 'true', focusable: 'false' });
+    ICONES[cle].forEach(function (d) { s.append(sv('path', { d: d })); });
+    return s;
+  }
   function render() {
     var view = document.getElementById('view'), tabs = document.getElementById('tabs');
     var inSession = UI.mode === 'session' && S.current;
     if (UI.mode === 'session' && !S.current) UI.mode = null;
+    var ecran = UI.mode || UI.tab;
+    animerEcran = !MOINS_DE_MOUVEMENT && ecran !== dernierEcran;
+    dernierEcran = ecran;
     document.body.classList.toggle('in-session', !!inSession);
     tabs.replaceChildren.apply(tabs, TABS.map(function (t) {
-      return h('button', { type: 'button', 'aria-current': UI.tab === t[0] && !UI.mode ? 'page' : null, onclick: function () { setTab(t[0]); } }, t[1]);
+      return h('button', { type: 'button', 'aria-label': t[1], 'aria-current': UI.tab === t[0] && !UI.mode ? 'page' : null, onclick: function () { setTab(t[0]); } },
+        icone(t[0]), h('span', null, t[1]));
     }));
     var nodes;
     if (UI.mode === 'session' && S.current) nodes = viewSession();
