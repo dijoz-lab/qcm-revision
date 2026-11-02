@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>QCM Police Judiciaire</title>
+<meta name="theme-color" content="#0B121E">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icones/icone.svg" type="image/svg+xml"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:wght@400;600&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap" id="view"></div>
+<nav id="tabs" aria-label="Navigation"></nav>
+
+<script src="parser.js"></script>
+<script src="seance.js"></script>
+<script src="stockage.js"></script>
+<script src="app.js"></script>
+<script>
+  // Agent de service : seulement depuis une vraie adresse (http/https), pas en double-clic sur le fichier.
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js');
+</script>
+</body>
+</html>

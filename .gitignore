@@ -1,0 +1,18 @@
+# Données privées : ne jamais publier
+banque-privee/
+exemple-qcm.txt
+sauvegarde-qcm-*.json
+.env
+.env.*
+
+# Notes de travail privées
+memoire/
+
+# Réglages personnels de Claude Code
+.claude/settings.local.json
+
+# Fichiers temporaires et techniques
+.tmp/
+.DS_Store
+node_modules/
+.venv/
