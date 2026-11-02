@@ -1,4 +1,22 @@
-(function () {
+/* ===== Progression : séances terminées, de la plus récente à la plus ancienne (fonction pure, lecture seule) =====
+   Calculée uniquement depuis l'historique qcm-pj-v1 ; testée dans tests/progression.test.js. */
+function lignesProgression(sessions, questions, themes) {
+  var theme = {};
+  questions.forEach(function (q) { theme[q.id] = q.theme; });
+  function bilan(rs) { var j = rs.filter(function (r) { return r.ok; }).length; return { total: rs.length, justes: j, pct: rs.length ? Math.round(100 * j / rs.length) : null }; }
+  return sessions.map(function (s, i) { return { s: s, i: i }; })
+    .filter(function (x) { return x.s.results && x.s.results.length; })
+    .sort(function (a, b) { return (b.s.ts - a.s.ts) || (b.i - a.i); })
+    .map(function (x) {
+      var s = x.s, g = bilan(s.results);
+      return { id: s.id, ts: s.ts, partial: !!s.partial, total: g.total, justes: g.justes, pct: g.pct,
+        themes: themes.map(function (t) { var b = bilan(s.results.filter(function (r) { return theme[r.qid] === t.k; })); return { k: t.k, name: t.name, total: b.total, justes: b.justes, pct: b.pct }; }) };
+    });
+}
+if (typeof module !== 'undefined') module.exports = { lignesProgression: lignesProgression };
+
+// L'interface ne démarre que dans un navigateur (les tests Node ne chargent que la fonction ci-dessus).
+if (typeof document !== 'undefined') (function () {
   var THEMES = [{ k: 'gav', name: 'Garde à vue' }, { k: 'proc', name: 'Procédure' }];
   var DL = null, storageOK = true;
 
@@ -66,11 +84,15 @@
     });
   }
   // Grand pourcentage (décoratif : sa valeur est aussi écrite en texte à côté pour les lecteurs d'écran).
+  // Sa lueur est un halo séparé posé derrière (pas de filtre sur le texte en dégradé : rectangle clair sur Safari iOS).
+  // Sans valeur (aucune séance), rien n'est affiché : la phrase sous le cadran suffit.
   function chiffreGeant(valeur, classe) {
+    if (valeur === null) return null;
     var el = h('div', { class: 'chiffre-geant' + (classe ? ' ' + classe : '') + (animerEcran ? ' anime' : ''), 'aria-hidden': 'true' });
-    if (valeur === null) el.textContent = '—'; else compter(el, valeur);
-    return el;
+    compter(el, valeur);
+    return h('div', { class: 'chiffre-zone' }, h('span', { class: 'chiffre-halo', 'aria-hidden': 'true' }), el);
   }
+  function pluriel(n, singulier, formePlurielle) { return n + ' ' + (n > 1 ? formePlurielle : singulier); }
   // Avatar : invisible (hidden) tant que son fichier n'a pas pu être chargé ; retiré s'il n'existe pas.
   function avatar(src, alt) {
     return h('img', { class: 'medaillon', src: src, alt: alt, hidden: true, onload: function (e) { e.target.hidden = false; }, onerror: function (e) { e.target.remove(); } });
@@ -149,7 +171,7 @@
     out.push(h('div', { class: 'zone-cadran' },
       cadran(moy, objectif),
       chiffreGeant(moy),
-      h('p', { class: 'phrase-moyenne' }, moy === null ? 'Pas encore de séance terminée.' : [h('span', { class: 'sr-only' }, 'Moyenne récente : ' + moy + ' %. '),
+      h('p', { class: 'phrase-moyenne' + (moy === null ? ' sans-chiffre' : '') }, moy === null ? 'Pas encore de séance terminée.' : [h('span', { class: 'sr-only' }, 'Moyenne récente : ' + moy + ' %. '),
         'Moyenne récente · ' + (ecart ? 'plus que ' + ecart + (ecart > 1 ? ' points' : ' point') + ' avant ton objectif' : 'objectif atteint')])));
     if (S.current) {
       var cur = S.current;
@@ -166,16 +188,20 @@
     }
     var cartes = [];
     if (recentes.length) {
+      // Toute la carte est un bouton qui mène à Progression (contenu en <span> : seul contenu autorisé dans un bouton).
       var interrompue = recentes.some(function (s) { return s.partial; });
-      cartes.push(h('div', { class: 'card' }, h('span', { class: 'label' }, 'Dernières séances'),
-        h('div', { class: 'colonnes' }, recentes.map(function (s, i) {
+      cartes.push(h('button', { class: 'card carte-lien', type: 'button', onclick: function () { setTab('prog'); },
+        'aria-label': 'Dernières séances : ' + recentes.map(function (s) { return pctSeance(s) + ' %' + (s.partial ? ' (interrompue)' : ''); }).join(', ') + '. Voir la progression' },
+        h('span', { class: 'label' }, 'Dernières séances'),
+        h('span', { class: 'colonnes' }, recentes.map(function (s, i) {
           var p = pctSeance(s);
-          return h('div', { class: 'colonne' + (i === recentes.length - 1 ? ' recente' : '') + (p < 50 ? ' faible' : '') },
+          return h('span', { class: 'colonne' + (i === recentes.length - 1 ? ' recente' : '') + (p < 50 ? ' faible' : '') },
             h('b', null, p + ' %'),
-            h('div', { class: 'tube', role: 'img', 'aria-label': p + ' % de questions réussies' + (s.partial ? ', séance interrompue' : '') }, h('i', { style: 'height:' + Math.max(p, 3) + '%' })),
+            h('span', { class: 'tube' }, h('i', { style: 'height:' + Math.max(p, 3) + '%' })),
             h('span', { class: 'label' }, dateCourte(s.ts) + (s.partial ? ' *' : '')));
         })),
-        interrompue ? h('p', { class: 'petit muted' }, '* séance interrompue') : null));
+        interrompue ? h('span', { class: 'petit muted' }, '* séance interrompue') : null,
+        h('span', { class: 'voir-plus' }, 'Voir la progression ›')));
     }
     if (total) {
       var seen = S.questions.filter(function (q) { return st[q.id]; }).length;
@@ -333,19 +359,18 @@
     out.push(h('div', { class: 'ticks lumineuse', role: 'img', 'aria-label': 'Progression' }, c.ids.map(function (id, i) {
       var r = c.results[i]; return h('i', { class: r ? (r.ok ? 'ok' : 'ko') : (i === c.idx ? 'now' : '') });
     })));
-    var instr = q.type === 'multi' ? 'Plusieurs réponses possibles, au moins une' : q.type === 'tf' ? 'Vrai ou faux' : 'Une seule réponse';
+    // Conditions d'examen : avant validation, aucune indication du nombre de bonnes réponses ;
+    // toutes les questions ont des cases à cocher libres (la notation, elle, ne change pas : sameSet).
     var qcard = h('div', { class: 'card carte-question' },
       h('span', { class: 'filigrane', 'aria-hidden': 'true' }, String(c.idx + 1)),
-      h('p', { class: 'read', style: 'white-space:pre-wrap;overflow-wrap:anywhere' }, q.text),
-      h('div', { class: 'label' }, instr));
+      h('p', { class: 'read', style: 'white-space:pre-wrap;overflow-wrap:anywhere' }, q.text));
     out.push(qcard);
     if (!locked) {
-      out.push(h('ul', { class: 'choices' + (q.type === 'multi' ? ' multi' : ''), role: q.type === 'multi' ? 'group' : 'radiogroup', 'aria-label': 'Réponses' }, q.choices.map(function (ch) {
+      out.push(h('ul', { class: 'choices', role: 'group', 'aria-label': 'Réponses' }, q.choices.map(function (ch) {
         var on = UI.pick.indexOf(ch.k) !== -1;
-        return h('li', null, h('button', { class: 'choice', type: 'button', role: q.type === 'multi' ? 'checkbox' : 'radio', 'aria-checked': on ? 'true' : 'false',
+        return h('li', null, h('button', { class: 'choice', type: 'button', role: 'checkbox', 'aria-checked': on ? 'true' : 'false',
           onclick: function () {
-            if (q.type === 'multi') { UI.pick = on ? UI.pick.filter(function (x) { return x !== ch.k; }) : UI.pick.concat([ch.k]); }
-            else UI.pick = [ch.k];
+            UI.pick = on ? UI.pick.filter(function (x) { return x !== ch.k; }) : UI.pick.concat([ch.k]);
             var y = window.scrollY; render(); window.scrollTo(0, y);
           } }, h('span', { class: 'k' }, q.type === 'tf' ? ch.k : ch.k), h('span', { class: 't' }, ch.text)));
       })));
@@ -356,6 +381,7 @@
         } }, 'Valider ma réponse'))));
     } else {
       out.push(h('div', { class: 'stamp ' + (res.ok ? 'ok' : 'ko'), role: 'status' }, res.ok ? '✓ Correct' : '✗ Incorrect'));
+      out.push(h('p', { class: 'attendu' }, q.correct.length > 1 ? q.correct.length + ' bonnes réponses attendues.' : '1 bonne réponse attendue.'));
       out.push(choiceList(q, picked, true));
       out.push(h('div', { class: 'card' }, explBlock(q) || h('p', { class: 'muted' }, 'Pas d’explication enregistrée pour cette question.')));
       var last = c.idx >= c.ids.length - 1;
@@ -445,11 +471,58 @@
     render();
   }
 
+  // ---------- Progression (lecture seule, données de qcm-pj-v1 uniquement) ----------
+  var NB_BATONS = 20;
+  function viewProgression() {
+    var out = [], objectif = lireReglages().objectif, lignes = lignesProgression(S.sessions, S.questions, THEMES);
+    out.push(h('div', null, h('span', { class: 'label' }, 'Tes séances terminées'), h('h1', null, 'Progression')));
+    out.push(h('div', { class: 'card' },
+      h('p', null, 'Ton objectif : ', h('b', { class: 'or' }, objectif + ' %'), ' de questions réussies par séance.'),
+      h('p', { class: 'petit muted' }, 'Objectif personnel, réglable sur l’accueil. Ce n’est pas un seuil officiel de l’examen.')));
+    if (!lignes.length) {
+      out.push(h('div', { class: 'card' }, h('p', null, 'Pas encore de séance terminée. Ta progression s’affichera ici après ta première séance.')));
+      return out;
+    }
+    var chrono = lignes.slice(0, NB_BATONS).reverse();
+    out.push(h('div', { class: 'card' },
+      h('span', { class: 'label' }, chrono.length > 1 ? 'Évolution des ' + chrono.length + ' dernières séances' : 'Évolution (1 séance)'),
+      h('div', { class: 'evolution', role: 'img', 'aria-label': 'Évolution, de la plus ancienne à la plus récente : ' + chrono.map(function (l) { return l.pct + ' %'; }).join(', ') + '. Objectif ' + objectif + ' %.' },
+        h('span', { class: 'ligne-objectif', style: 'bottom:' + objectif + '%' }),
+        chrono.map(function (l, i) { return h('span', { class: 'baton' + (i === chrono.length - 1 ? ' recente' : ''), style: 'height:' + Math.max(l.pct, 2) + '%' }); })),
+      h('p', { class: 'petit muted' }, 'De la plus ancienne (à gauche) à la plus récente (à droite). Ligne dorée : ton objectif (' + objectif + ' %).')));
+    out.push(h('div', { class: 'card' },
+      h('span', { class: 'label' }, pluriel(lignes.length, 'séance', 'séances') + ', de la plus récente à la plus ancienne'),
+      h('ul', { class: 'liste-seances' }, lignes.map(function (l) {
+        return h('li', null,
+          h('div', { class: 'ligne-tete' }, h('span', null, fmtDate(l.ts) + (l.partial ? ' · interrompue' : '')), h('b', { class: 'ligne-pct' }, l.pct + ' %')),
+          h('p', { class: 'petit muted' }, l.themes.map(function (t) { return t.name + ' ' + (t.total ? t.pct + ' % (' + t.justes + ' sur ' + t.total + ')' : ': aucune question'); }).join(' · ')));
+      }))));
+    return out;
+  }
+
+  // ---------- Réglages : entrées vers les écrans existants (Banque, Importer, Sauvegarde), sans changer leur contenu ----------
+  var SOUS_REGLAGES = ['bank', 'import', 'backup'];
+  var ENTREES_REGLAGES = [['bank', 'Banque', 'Questions enregistrées'], ['import', 'Importer', 'Ajouter un QCM à la banque'], ['backup', 'Sauvegarde', 'Protéger ta progression']];
+  function viewReglages() {
+    return [h('div', null, h('span', { class: 'label' }, 'Banque, import et sauvegarde'), h('h1', null, 'Réglages')),
+      h('div', { class: 'entrees' }, ENTREES_REGLAGES.map(function (e) {
+        return h('button', { class: 'card entree', type: 'button', onclick: function () { setTab(e[0]); } },
+          icone(e[0]),
+          h('span', { class: 'entree-texte' }, h('span', { class: 'entree-titre' }, e[1]), h('span', { class: 'entree-sous' }, e[2])),
+          h('span', { class: 'entree-fleche', 'aria-hidden': 'true' }, '›'));
+      }))];
+  }
+  function boutonRetour() {
+    return h('button', { class: 'btn retour', type: 'button', 'aria-label': 'Retour aux Réglages', onclick: function () { setTab('reglages'); } }, '‹ Réglages');
+  }
+
   // ---------- rendu général ----------
-  var TABS = [['home', 'Accueil'], ['import', 'Importer'], ['bank', 'Banque'], ['backup', 'Sauvegarde']];
-  // Icônes des onglets : contours simples dessinés ici (24 x 24).
+  var TABS = [['home', 'Accueil'], ['prog', 'Progression'], ['reglages', 'Réglages']];
+  // Icônes (onglets et entrées des Réglages) : contours simples dessinés ici (24 x 24).
   var ICONES = {
     home: ['M3.5 11 12 4l8.5 7', 'M5.5 9.5v10h13v-10', 'M10 19.5v-5.5h4v5.5'],
+    prog: ['M4 19.5h16', 'M4.5 16l4.5-5 3.5 3 6.5-7.5', 'M15 6.5h4v4'],
+    reglages: ['M4 7h16', 'M15 4.5v5', 'M4 12h16', 'M8 9.5v5', 'M4 17h16', 'M13 14.5v5'],
     import: ['M12 4v10.5', 'M7.5 10 12 14.5 16.5 10', 'M4.5 15.5v4h15v-4'],
     bank: ['M5 5h4v14.5H5z', 'M10.5 5h4v14.5h-4z', 'M16 6.2l3.4-.9 3 13.6-3.4.9z'],
     backup: ['M12 3.5 5 6.3v5.2c0 4.3 2.9 7.8 7 9 4.1-1.2 7-4.7 7-9V6.3z', 'M9 12.2l2.1 2.1L15.2 10']
@@ -467,14 +540,17 @@
     animerEcran = !MOINS_DE_MOUVEMENT && ecran !== dernierEcran;
     dernierEcran = ecran;
     document.body.classList.toggle('in-session', !!inSession);
+    var sousReglages = SOUS_REGLAGES.indexOf(UI.tab) !== -1;
     tabs.replaceChildren.apply(tabs, TABS.map(function (t) {
-      return h('button', { type: 'button', 'aria-label': t[1], 'aria-current': UI.tab === t[0] && !UI.mode ? 'page' : null, onclick: function () { setTab(t[0]); } },
+      var actif = !UI.mode && (UI.tab === t[0] || (t[0] === 'reglages' && sousReglages));
+      return h('button', { type: 'button', 'aria-label': t[1], 'aria-current': actif ? 'page' : null, onclick: function () { setTab(t[0]); } },
         icone(t[0]), h('span', null, t[1]));
     }));
     var nodes;
     if (UI.mode === 'session' && S.current) nodes = viewSession();
     else if (UI.mode === 'summary' && UI.summary) nodes = viewSummary();
-    else nodes = ({ home: viewHome, import: viewImport, bank: viewBank, backup: viewBackup })[UI.tab]();
+    else nodes = ({ home: viewHome, prog: viewProgression, reglages: viewReglages, import: viewImport, bank: viewBank, backup: viewBackup })[UI.tab]();
+    if (!UI.mode && sousReglages) nodes = [boutonRetour()].concat(nodes);
     view.replaceChildren.apply(view, nodes);
     if (!UI.mode && UI.tab === 'import' && UI.imp.parsed) renderReview();
   }

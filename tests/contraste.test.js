@@ -53,8 +53,19 @@ const PAIRES = [
   ['alerte (#F2C26B) sur son fond', WARN, rgba(242, 194, 107, 0.12, FOND)],
   ['juste (#7FD09A) sur son fond vert', OK, rgba(127, 208, 154, 0.12, FOND)],
   ['faux (#F08A7E) sur son fond corail', KO, rgba(240, 138, 126, 0.12, FOND)],
-  ['lien et accent (#8FB2FF) sur carte', ACCENT, CARTE]
+  ['lien et accent (#8FB2FF) sur carte', ACCENT, CARTE],
+  ['grand pourcentage, bas du dégradé (#A9C0FF) sur le centre de son halo', hex('#A9C0FF'), rgba(143, 178, 255, 0.28, FOND)],
+  ['objectif en or (#E8C468) sur carte (Progression)', OR, CARTE]
 ];
+// Le halo du grand pourcentage doit garder l'opacité utilisée ci-dessus.
+test('le halo du grand pourcentage garde une opacité de .28 au plus', function () {
+  const m = CSS.match(/\.chiffre-halo \{[^}]*rgba\(143, 178, 255, ([0-9.]+)\)/);
+  assert.ok(m && parseFloat(m[1]) <= 0.28);
+});
+test('aucun filtre sur le grand pourcentage (rectangle clair sur Safari iOS)', function () {
+  const regle = CSS.match(/\.chiffre-geant \{[^}]*\}/)[0];
+  assert.doesNotMatch(regle, /filter/);
+});
 
 PAIRES.forEach(function (p) {
   test('contraste ≥ 4,5:1 : ' + p[0], function (t) {
