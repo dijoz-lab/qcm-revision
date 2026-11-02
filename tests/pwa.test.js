@@ -49,6 +49,20 @@ test('manifeste : icônes 192 et 512, dont une maskable, fichiers présents à l
   });
 });
 
+test('aucune connexion à Google Fonts : ni dans index.html, ni ailleurs dans docs/', function () {
+  tousLesFichiers(DOCS, '').filter(function (f) { return /\.(html|css|js|webmanifest)$/.test(f); }).forEach(function (f) {
+    assert.doesNotMatch(fs.readFileSync(path.join(DOCS, f), 'utf8'), /fonts\.(googleapis|gstatic)\.com/, f);
+  });
+});
+
+test('polices : chaque police déclarée dans style.css existe dans docs/polices/, et chaque fichier .woff2 est déclaré', function () {
+  const css = fs.readFileSync(path.join(DOCS, 'style.css'), 'utf8');
+  const declarees = (css.match(/url\(polices\/[^)]+\.woff2\)/g) || []).map(function (u) { return u.slice(4, -1); }).sort();
+  const presentes = fs.readdirSync(path.join(DOCS, 'polices')).filter(function (f) { return /\.woff2$/.test(f); }).map(function (f) { return 'polices/' + f; }).sort();
+  assert.ok(declarees.length > 0);
+  assert.deepEqual(declarees, presentes);
+});
+
 test('index.html : manifeste lié et agent de service enregistré', function () {
   const html = fs.readFileSync(path.join(DOCS, 'index.html'), 'utf8');
   assert.match(html, /<link rel="manifest" href="manifest\.webmanifest">/);

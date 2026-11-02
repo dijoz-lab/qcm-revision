@@ -1,7 +1,7 @@
 /* ===== Agent de service (service worker) : garde l'application en réserve pour l'usage sans internet =====
    RÈGLE : à chaque modification d'un fichier de docs/, augmenter VERSION, sinon le téléphone garde l'ancienne version.
    Les données (questions, séances) ne sont pas ici : elles restent dans la mémoire du navigateur (localStorage). */
-var VERSION = 'qcm-pj-cache-1';
+var VERSION = 'qcm-pj-cache-2';
 var FICHIERS = [
   "./",
   "index.html",
@@ -14,7 +14,20 @@ var FICHIERS = [
   "icones/icone.svg",
   "icones/icon-192.png",
   "icones/icon-512.png",
-  "icones/icon-maskable-512.png"
+  "icones/icon-maskable-512.png",
+  "polices/barlow-condensed-LICENSE.txt",
+  "polices/barlow-condensed-latin-600-normal.woff2",
+  "polices/barlow-condensed-latin-700-normal.woff2",
+  "polices/ibm-plex-mono-LICENSE.txt",
+  "polices/ibm-plex-mono-latin-400-normal.woff2",
+  "polices/ibm-plex-mono-latin-500-normal.woff2",
+  "polices/inter-LICENSE.txt",
+  "polices/inter-latin-400-normal.woff2",
+  "polices/inter-latin-600-normal.woff2",
+  "polices/inter-latin-700-normal.woff2",
+  "polices/source-serif-4-LICENSE.txt",
+  "polices/source-serif-4-latin-400-normal.woff2",
+  "polices/source-serif-4-latin-600-normal.woff2"
 ];
 
 self.addEventListener('install', function (e) {
