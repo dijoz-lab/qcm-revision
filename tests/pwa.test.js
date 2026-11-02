@@ -63,6 +63,12 @@ test('polices : chaque police déclarée dans style.css existe dans docs/polices
   assert.deepEqual(declarees, presentes);
 });
 
+test('index.html : les scripts sont chargés dans l’ordre (reglages.js avant app.js)', function () {
+  const html = fs.readFileSync(path.join(DOCS, 'index.html'), 'utf8');
+  const ordre = (html.match(/<script src="([^"]+)"><\/script>/g) || []).map(function (s) { return s.match(/src="([^"]+)"/)[1]; });
+  assert.deepEqual(ordre, ['parser.js', 'seance.js', 'stockage.js', 'reglages.js', 'app.js']);
+});
+
 test('index.html : manifeste lié et agent de service enregistré', function () {
   const html = fs.readFileSync(path.join(DOCS, 'index.html'), 'utf8');
   assert.match(html, /<link rel="manifest" href="manifest\.webmanifest">/);

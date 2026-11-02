@@ -37,6 +37,50 @@
   function byId() { var m = {}; S.questions.forEach(function (q) { m[q.id] = q; }); return m; }
   function fmtDate(ts) { return new Date(ts).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); }
 
+  // ---------- outils d'affichage du design A2 (pourcentages seulement) ----------
+  var NB_SEANCES_RECENTES = 3;
+  var AVATAR_ENTRAINEMENT = 'avatars/avatar-entrainement.webp';
+  function sv(tag, attrs) {
+    var e = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    for (var k in attrs) if (attrs[k] != null) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+  function pctSeance(s) { return Math.round(100 * s.results.filter(function (r) { return r.ok; }).length / s.results.length); }
+  function seancesRecentes() { return S.sessions.filter(function (s) { return s.results && s.results.length; }).slice(-NB_SEANCES_RECENTES); }
+  function moyenne(liste) { return liste.length ? Math.round(liste.reduce(function (a, s) { return a + pctSeance(s); }, 0) / liste.length) : null; }
+  function joursDepuis(ts) { return Math.floor((Date.now() - ts) / 864e5); }
+  // Avatar : invisible (hidden) tant que son fichier n'a pas pu être chargé ; retiré s'il n'existe pas.
+  function avatar(src, alt) {
+    return h('img', { class: 'medaillon', src: src, alt: alt, hidden: true, onload: function (e) { e.target.hidden = false; }, onerror: function (e) { e.target.remove(); } });
+  }
+  // Cadran : 60 graduations, arc proportionnel à pct (aucun arc si null ou 0), repère or à l'objectif, avatar au centre.
+  function cadran(pct, objectif, classeArc, classeCadran) {
+    var c = 150, r = 126, tour = 2 * Math.PI * r, i, a;
+    var svg = sv('svg', { viewBox: '0 0 300 300', 'aria-hidden': 'true', focusable: 'false' });
+    var grad = sv('linearGradient', { id: 'degrade-arc', x1: '0', y1: '0', x2: '1', y2: '1' });
+    grad.append(sv('stop', { offset: '0', 'stop-color': '#8FB2FF' }), sv('stop', { offset: '1', 'stop-color': '#5E86F0' }));
+    svg.append(sv('defs', {}));
+    svg.firstChild.append(grad);
+    for (i = 0; i < 60; i++) {
+      a = (i * 6 - 90) * Math.PI / 180;
+      var forte = i % 5 === 0, r2 = forte ? 148 : 144;
+      svg.append(sv('line', { class: 'graduation' + (forte ? ' forte' : ''), x1: c + 138 * Math.cos(a), y1: c + 138 * Math.sin(a), x2: c + r2 * Math.cos(a), y2: c + r2 * Math.sin(a) }));
+    }
+    svg.append(sv('circle', { class: 'piste', cx: c, cy: c, r: r }));
+    if (pct) svg.append(sv('circle', { class: 'arc' + (classeArc ? ' ' + classeArc : ''), stroke: classeArc ? null : 'url(#degrade-arc)', cx: c, cy: c, r: r,
+      'stroke-dasharray': (tour * pct / 100) + ' ' + tour, transform: 'rotate(-90 ' + c + ' ' + c + ')' }));
+    a = (objectif * 3.6 - 90) * Math.PI / 180;
+    svg.append(sv('line', { class: 'repere-or', x1: c + 114 * Math.cos(a), y1: c + 114 * Math.sin(a), x2: c + 138 * Math.cos(a), y2: c + 138 * Math.sin(a) }));
+    return h('div', { class: 'cadran' + (classeCadran ? ' ' + classeCadran : '') }, svg, avatar(AVATAR_ENTRAINEMENT, 'Avatar d’entraînement'));
+  }
+  function selectObjectif(objectif) {
+    var vals = [], v;
+    for (v = 50; v <= 100; v += 5) vals.push(v);
+    if (vals.indexOf(objectif) === -1) { vals.push(objectif); vals.sort(function (x, y) { return x - y; }); }
+    return h('select', { id: 'objectif', onchange: function (e) { ecrireObjectif(parseInt(e.target.value, 10)); render(); } },
+      vals.map(function (x) { return h('option', { value: x, selected: x === objectif }, x + ' %'); }));
+  }
+
   // ---------- état de l'interface ----------
   var UI = { tab: 'home', mode: null, pick: [], imp: { theme: 'gav', label: '', text: '', parsed: null, ok: {} }, bankFilter: 'all', backupMsg: null, summary: null };
 
@@ -71,22 +115,39 @@
   // ---------- Accueil ----------
   function viewHome() {
     var out = [], st = statsMap(S.sessions), total = S.questions.length;
-    out.push(h('div', null, h('span', { class: 'label' }, 'Examen final OPJ · police judiciaire'), h('h1', null, 'QCM Police Judiciaire')));
+    var objectif = lireReglages().objectif, recentes = seancesRecentes(), moy = moyenne(recentes);
     if (!storageOK) out.push(h('div', { class: 'notice bad' }, "Ce navigateur ne garde pas les données. Ta progression sera perdue à la fermeture. Ouvre la page dans Chrome, hors navigation privée."));
+    out.push(cadran(moy, objectif));
+    out.push(h('div', null, h('span', { class: 'label' }, 'Examen final OPJ · police judiciaire'), h('h1', { class: 'titre-pret' }, 'Prêt.')));
+    out.push(h('div', { class: 'card' },
+      h('div', { class: 'row sb' }, h('span', null, 'Moyenne récente ', h('b', null, moy === null ? '—' : moy + ' %')), h('span', { class: 'or' }, '→ objectif ' + objectif + ' %')),
+      h('div', { class: 'objectif-barre', role: 'img', 'aria-label': moy === null ? 'Pas encore de séance terminée, objectif ' + objectif + ' %' : 'Moyenne récente ' + moy + ' %, objectif ' + objectif + ' %' },
+        h('i', { style: 'width:' + (moy || 0) + '%' }), h('b', { style: 'left:' + objectif + '%' })),
+      h('p', { class: 'muted', style: 'font-size:14px' }, moy === null ? 'Pas encore de séance terminée.' : 'Moyenne des ' + recentes.length + ' dernière(s) séance(s). ' + messageObjectif(moy, objectif)),
+      h('label', { class: 'label', for: 'objectif' }, 'Mon objectif personnel (ce n’est pas un seuil officiel)'),
+      selectObjectif(objectif)));
     if (S.current) {
       var cur = S.current;
       out.push(h('div', { class: 'card' }, h('h2', null, 'Séance en cours'),
         h('p', { class: 'muted' }, cur.results.length + ' question(s) répondue(s) sur ' + cur.ids.length + '.'),
-        h('div', { class: 'row' }, h('button', { class: 'btn primary', type: 'button', onclick: function () { UI.mode = 'session'; UI.pick = []; render(); window.scrollTo(0, 0); } }, 'Reprendre'),
-          confirmBtn('Abandonner', 'Confirmer l’abandon', 'danger', function () { finishSession(true); }))));
+        h('button', { class: 'btn primary big', type: 'button', onclick: function () { UI.mode = 'session'; UI.pick = []; render(); window.scrollTo(0, 0); } }, 'Reprendre'),
+        h('div', { class: 'row' }, confirmBtn('Abandonner', 'Confirmer l’abandon', 'danger', function () { finishSession(true); }))));
     } else {
       var size = Math.min(SESSION_SIZE, total);
       out.push(h('div', { class: 'card' },
-        h('h2', null, 'Séance du jour'),
-        total ? h('p', null, size + ' questions mélangées : garde à vue et procédure, tous les QCM ensemble. Environ un tiers de questions à retravailler, le reste jamais vues ou peu vues.')
-              : h('p', null, "La banque est vide. Importe d'abord un QCM pour pouvoir t'entraîner."),
-        total ? h('button', { class: 'btn primary', type: 'button', onclick: startSession }, 'Commencer la séance')
-              : h('button', { class: 'btn primary', type: 'button', onclick: function () { setTab('import'); } }, 'Importer un QCM')));
+        total ? h('button', { class: 'btn primary big', type: 'button', onclick: startSession }, 'Commencer la séance')
+              : h('button', { class: 'btn primary big', type: 'button', onclick: function () { setTab('import'); } }, 'Importer un QCM'),
+        total ? h('p', { class: 'muted', style: 'font-size:14px' }, size + ' questions mélangées : garde à vue et procédure, tous les QCM ensemble. Environ un tiers de questions à retravailler, le reste jamais vues ou peu vues.')
+              : h('p', null, "La banque est vide. Importe d'abord un QCM pour pouvoir t'entraîner.")));
+    }
+    if (recentes.length) {
+      out.push(h('div', { class: 'card' }, h('h3', null, 'Dernières séances'),
+        h('div', { class: 'mini-barres' }, recentes.slice().reverse().map(function (s) {
+          var p = pctSeance(s);
+          return h('div', { class: 'mini-barre' }, h('b', null, p + ' %'),
+            h('div', { class: 'bar', role: 'img', 'aria-label': p + ' % de questions réussies' }, h('i', { style: 'width:' + p + '%' })),
+            h('span', { class: 'label' }, new Date(s.ts).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) + (s.partial ? ' · interrompue' : '')));
+        }))));
     }
     if (total) {
       var seen = S.questions.filter(function (q) { return st[q.id]; }).length;
@@ -96,17 +157,11 @@
         h('div', null, h('div', { class: 'bar', role: 'img', 'aria-label': seen + ' questions vues sur ' + total }, h('i', { style: 'width:' + Math.round(100 * seen / total) + '%' })),
           h('p', { class: 'muted', style: 'margin-top:6px;font-size:14px' }, seen + ' sur ' + total + ' questions vues au moins une fois'))));
     }
-    var done = S.sessions.filter(function (s) { return s.results && s.results.length; }).slice(-5).reverse();
-    if (done.length) {
-      out.push(h('div', { class: 'card' }, h('h3', null, 'Dernières séances'),
-        done.map(function (s) {
-          var ok = s.results.filter(function (r) { return r.ok; }).length;
-          return h('div', { class: 'stat' }, h('span', null, fmtDate(s.ts) + (s.partial ? ' (interrompue)' : '')), h('b', null, ok + ' / ' + s.results.length));
-        })));
-      var old = !S.lastBackup || (Date.now() - S.lastBackup) > 7 * 864e5;
-      if (old) out.push(h('div', { class: 'notice' }, S.lastBackup ? 'Dernière sauvegarde il y a plus de 7 jours. ' : 'Aucune sauvegarde faite pour l’instant. ',
-        h('a', { href: '#', style: 'color:inherit;font-weight:600', onclick: function (e) { e.preventDefault(); setTab('backup'); } }, 'Sauvegarder maintenant')));
-    }
+    var jours = S.lastBackup ? joursDepuis(S.lastBackup) : null;
+    var txtSauv = jours === null ? 'Aucune sauvegarde faite pour l’instant. ' : jours < 1 ? 'Dernière sauvegarde aujourd’hui. ' : 'Dernière sauvegarde il y a ' + jours + (jours > 1 ? ' jours. ' : ' jour. ');
+    var alerte = recentes.length && (jours === null || jours > 7);
+    out.push(h('div', { class: alerte ? 'notice' : 'card' }, h('p', null, txtSauv + (alerte && jours !== null ? 'Plus de 7 jours : pense à sauvegarder. ' : ''),
+      h('a', { href: '#', style: 'color:inherit;font-weight:600', onclick: function (e) { e.preventDefault(); setTab('backup'); } }, 'Sauvegarder maintenant'))));
     return out;
   }
 
@@ -246,11 +301,12 @@
     var out = [];
     out.push(h('div', { class: 'row sb' }, h('span', { class: 'label' }, 'Question ' + (c.idx + 1) + ' / ' + c.ids.length + ' · ' + themeName(q.theme)),
       h('button', { class: 'btn small', type: 'button', onclick: function () { UI.mode = null; render(); window.scrollTo(0, 0); } }, 'Pause')));
-    out.push(h('div', { class: 'ticks', role: 'img', 'aria-label': 'Progression' }, c.ids.map(function (id, i) {
+    out.push(h('div', { class: 'ticks lumineuse', role: 'img', 'aria-label': 'Progression' }, c.ids.map(function (id, i) {
       var r = c.results[i]; return h('i', { class: r ? (r.ok ? 'ok' : 'ko') : (i === c.idx ? 'now' : '') });
     })));
     var instr = q.type === 'multi' ? 'Plusieurs réponses possibles, au moins une' : q.type === 'tf' ? 'Vrai ou faux' : 'Une seule réponse';
-    var qcard = h('div', { class: 'card' },
+    var qcard = h('div', { class: 'card carte-question' },
+      h('span', { class: 'filigrane', 'aria-hidden': 'true' }, String(c.idx + 1)),
       h('p', { class: 'read', style: 'white-space:pre-wrap;overflow-wrap:anywhere' }, q.text),
       h('div', { class: 'label' }, instr));
     out.push(qcard);
@@ -284,16 +340,28 @@
   function viewSummary() {
     var s = UI.summary, m = byId(), out = [];
     var ok = s.results.filter(function (r) { return r.ok; }).length, n = s.results.length;
+    var pct = Math.round(100 * ok / n), objectif = lireReglages().objectif, ecart = ecartObjectif(pct, objectif);
+    var etat = !ecart ? 'atteint' : ecart <= 10 ? 'proche' : 'loin';
     out.push(h('div', null, h('span', { class: 'label' }, s.partial ? 'Séance interrompue' : 'Séance terminée'), h('h1', null, 'Résultat')));
-    out.push(h('div', { class: 'card' }, h('div', { class: 'score' }, ok + ' / ' + n), h('p', { class: 'muted' }, Math.round(100 * ok / n) + ' % de questions réussies. Une question à réponses multiples compte juste seulement si toutes les bonnes réponses sont cochées et aucune autre.'),
+    out.push(h('div', { class: 'card' },
+      cadran(pct, objectif, etat, 'halo'),
+      h('div', { class: 'pourcentage' }, pct + ' %'),
+      h('p', { role: 'status', style: 'text-align:center;font-weight:600' }, pct + ' % de questions réussies. ' + messageObjectif(pct, objectif)),
+      h('p', { class: 'muted', style: 'text-align:center;font-size:14px' }, 'Objectif personnel, réglable sur l’accueil. Ce n’est pas un seuil officiel de l’examen.'),
+      h('div', { class: 'compteurs' },
+        h('div', null, h('b', { class: 'ok' }, ok), h('span', { class: 'label' }, 'Correctes')),
+        h('div', null, h('b', { class: 'ko' }, n - ok), h('span', { class: 'label' }, 'Incorrectes')),
+        h('div', null, h('b', null, n), h('span', { class: 'label' }, 'Total'))),
       THEMES.map(function (t) {
         var rs = s.results.filter(function (r) { return m[r.qid] && m[r.qid].theme === t.k; });
-        return rs.length ? h('div', { class: 'stat' }, h('span', null, t.name), h('b', null, rs.filter(function (r) { return r.ok; }).length + ' / ' + rs.length)) : null;
-      })));
+        var okT = rs.filter(function (r) { return r.ok; }).length;
+        return rs.length ? h('div', { class: 'stat' }, h('span', null, t.name), h('b', null, Math.round(100 * okT / rs.length) + ' % (' + okT + ' sur ' + rs.length + ')')) : null;
+      }),
+      h('p', { class: 'muted', style: 'font-size:14px' }, 'Une question à réponses multiples compte juste seulement si toutes les bonnes réponses sont cochées et aucune autre.')));
     var missed = s.results.filter(function (r) { return !r.ok && m[r.qid]; });
     if (missed.length) {
-      out.push(h('h2', null, 'À revoir (' + missed.length + ')'));
-      missed.forEach(function (r) { out.push(questionCard(m[r.qid], r.picked, true)); });
+      out.push(h('div', { class: 'card a-retravailler' }, h('h2', null, 'À retravailler (' + missed.length + ')'),
+        missed.map(function (r) { return questionCard(m[r.qid], r.picked, true); })));
     } else out.push(h('div', { class: 'notice good' }, 'Aucune erreur sur cette séance.'));
     out.push(h('div', { class: 'row' }, h('button', { class: 'btn primary', type: 'button', onclick: startSession }, 'Nouvelle séance'), h('button', { class: 'btn', type: 'button', onclick: function () { setTab('home'); } }, 'Accueil')));
     return out;
