@@ -39,7 +39,7 @@
 
   // ---------- outils d'affichage du design A2 (pourcentages seulement) ----------
   var NB_SEANCES_RECENTES = 3;
-  var AVATAR_ENTRAINEMENT = 'avatars/avatar-entrainement.webp';
+  var AVATAR_ENTRAINEMENT = 'avatars/avatar-entrainement.png';
   function sv(tag, attrs) {
     var e = document.createElementNS('http://www.w3.org/2000/svg', tag);
     for (var k in attrs) if (attrs[k] != null) e.setAttribute(k, attrs[k]);
