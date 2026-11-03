@@ -2,7 +2,7 @@
 // Lancement depuis le dossier du projet : node --test
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { demarrer, texte, tous, clic, bouton, attendre } = require('./faux-navigateur.js');
+const { demarrer, creerHorloge, texte, tous, clic, bouton, attendre } = require('./faux-navigateur.js');
 
 // Banque fictive d'une question, jamais sauvegardée.
 function etat() {
@@ -55,8 +55,10 @@ test('autre erreur de partage : message court qui propose « Copier », date inc
 });
 
 test('le texte partagé (fichier .txt ou texte seul) est identique à celui de « Copier la sauvegarde »', async function () {
+  // Même horloge pour les trois lancements : chaque texte porte la date de sa sauvegarde, la même ici.
+  const hz = creerHorloge();
   const t = {};
-  const copie = demarrer(etat(), { clipboard: pressePapiers(t) });
+  const copie = demarrer(etat(), { clipboard: pressePapiers(t) }, { horloge: hz });
   allerSauvegarde(copie);
   clic(bouton(copie.view, 'Copier la sauvegarde'));
   await attendre();
@@ -65,7 +67,7 @@ test('le texte partagé (fichier .txt ou texte seul) est identique à celui de �
 
   // Fichier accepté : un fichier texte sauvegarde-qcm-AAAA-MM-JJ.txt.
   let partage = null;
-  const fichier = demarrer(etat(), { canShare: function (d) { return !!(d && d.files); }, share: function (d) { partage = d; return Promise.resolve(); } });
+  const fichier = demarrer(etat(), { canShare: function (d) { return !!(d && d.files); }, share: function (d) { partage = d; return Promise.resolve(); } }, { horloge: hz });
   allerSauvegarde(fichier);
   clic(bouton(fichier.view, 'Partager la sauvegarde'));
   await attendre();
@@ -75,7 +77,7 @@ test('le texte partagé (fichier .txt ou texte seul) est identique à celui de �
 
   // Fichiers refusés : le même texte, sans fichier.
   partage = null;
-  const seul = demarrer(etat(), { canShare: function () { return false; }, share: function (d) { partage = d; return Promise.resolve(); } });
+  const seul = demarrer(etat(), { canShare: function () { return false; }, share: function (d) { partage = d; return Promise.resolve(); } }, { horloge: hz });
   allerSauvegarde(seul);
   clic(bouton(seul.view, 'Partager la sauvegarde'));
   await attendre();

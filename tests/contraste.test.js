@@ -55,7 +55,15 @@ const PAIRES = [
   ['faux (#F08A7E) sur son fond corail', KO, rgba(240, 138, 126, 0.12, FOND)],
   ['lien et accent (#8FB2FF) sur carte', ACCENT, CARTE],
   ['grand pourcentage, bas du dégradé (#A9C0FF) sur le centre de son halo', hex('#A9C0FF'), rgba(143, 178, 255, 0.28, FOND)],
-  ['objectif en or (#E8C468) sur carte (Progression)', OR, CARTE]
+  ['objectif en or (#E8C468) sur carte (Progression)', OR, CARTE],
+  // Passe 6 : examens blancs.
+  ['« Oubliée » orange (#FFB066) sur carte', variable('oublie'), CARTE],
+  ['« Oubliée » orange (#FFB066) sur le détail du récapitulatif (#121C38)', variable('oublie'), hex('#121C38')],
+  ['texte secondaire (#9FB0D6) sur le détail du récapitulatif (#121C38)', MUTED, hex('#121C38')],
+  ['temps global en or (#E8C468) sur le fond', OR, FOND],
+  ['« Trouvée » vert (#7FD09A) sur son fond vert', OK, rgba(127, 208, 154, 0.12, FOND)],
+  ['« Cochée à tort » corail (#F08A7E) sur son fond corail', KO, rgba(240, 138, 126, 0.12, FOND)],
+  ['« Minute dépassée » (#F2C26B) sur le fond', WARN, FOND]
 ];
 // Le halo du grand pourcentage doit garder l'opacité utilisée ci-dessus.
 test('le halo du grand pourcentage garde une opacité de .28 au plus', function () {

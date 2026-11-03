@@ -68,3 +68,34 @@ test('écart à l’objectif et message, en points de pourcentage', function () 
   assert.equal(rg.messageObjectif(79, 80), 'Plus que 1 point avant ton objectif (80 %).');
   assert.equal(rg.messageObjectif(80, 80), 'Objectif atteint (80 %).');
 });
+
+// ---------- barème de l'examen (ajout de la passe 6) ----------
+test('barème par défaut : 1 / 0,5 / 0', function () {
+  utiliser(memoire());
+  assert.deepEqual(rg.lireBareme(), { bonne: 1, fausse: 0.5, vide: 0 });
+});
+
+test('barème puis objectif, objectif puis barème : aucun des deux n’efface l’autre', function () {
+  const mem = utiliser(memoire());
+  assert.equal(rg.ecrireBareme({ bonne: 2, fausse: 1, vide: 0.25 }), true);
+  assert.equal(rg.ecrireObjectif(70), true);
+  assert.deepEqual(rg.lireBareme(), { bonne: 2, fausse: 1, vide: 0.25 });
+  assert.deepEqual(rg.lireReglages(), { objectif: 70 });
+  assert.equal(rg.ecrireBareme({ bonne: 1, fausse: 0, vide: 0 }), true);
+  assert.deepEqual(rg.lireReglages(), { objectif: 70 });
+  assert.deepEqual(JSON.parse(mem._m['qcm-pj-reglages']), { bareme: { bonne: 1, fausse: 0, vide: 0 }, objectif: 70 });
+});
+
+test('barème refusé (bonne ≤ 0, négatif, texte, non fini) : rien n’est écrit', function () {
+  const mem = utiliser(memoire());
+  [{ bonne: 0, fausse: 0, vide: 0 }, { bonne: 1, fausse: -1, vide: 0 }, { bonne: '1', fausse: 0, vide: 0 }, { bonne: 1, fausse: Infinity, vide: 0 }, null]
+    .forEach(function (b) { assert.equal(rg.ecrireBareme(b), false); });
+  assert.deepEqual(Object.keys(mem._m), []);
+});
+
+test('barème illisible dans la mémoire → barème par défaut, et l’objectif reste lisible', function () {
+  const mem = utiliser(memoire());
+  mem._m['qcm-pj-reglages'] = JSON.stringify({ objectif: 65, bareme: { bonne: 'x' } });
+  assert.deepEqual(rg.lireBareme(), { bonne: 1, fausse: 0.5, vide: 0 });
+  assert.deepEqual(rg.lireReglages(), { objectif: 65 });
+});
